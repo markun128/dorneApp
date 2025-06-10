@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>テストアプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>テストアプリ</h1>
+        </header>
+        
+        <main>
+            <section class="form-section">
+                <h2>データ入力</h2>
+                <form id="dataForm">
+                    <div class="input-group">
+                        <label for="name">名前:</label>
+                        <input type="text" id="name" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="email">メール:</label>
+                        <input type="email" id="email" required>
+                    </div>
+                    <button type="submit">追加</button>
+                </form>
+            </section>
+            
+            <section class="display-section">
+                <h2>データ一覧</h2>
+                <div id="dataList" class="data-list">
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
