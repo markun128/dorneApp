@@ -1,7 +1,7 @@
 {
-  "name": "drone-flight-log-app",
-  "version": "1.0.0",
-  "description": "国土交通省準拠ドローン飛行記録アプリ（React版）",
+  "name": "skylogger-pro",
+  "version": "2.0.0",
+  "description": "SkyLogger Pro - Professional Drone Flight Management System",
   "main": "src/index.js",
   "scripts": {
     "start": "webpack-dev-server --mode development --open",

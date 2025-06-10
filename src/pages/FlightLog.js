@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 const FlightLog = () => {
   const [flightRecords, setFlightRecords] = useState([]);
   const [aircraftList, setAircraftList] = useState([]);
+  const [showMap, setShowMap] = useState(false);
+  const [mapData, setMapData] = useState({ lat: 0, lng: 0, name: '' });
   const [flightData, setFlightData] = useState({
     flightDate: new Date().toISOString().split('T')[0],
     selectedAircraft: '',
@@ -11,8 +13,12 @@ const FlightLog = () => {
     flightPurpose: '',
     flightRoute: '',
     takeoffLocation: '',
+    takeoffLatitude: '',
+    takeoffLongitude: '',
     takeoffTime: '',
     landingLocation: '',
+    landingLatitude: '',
+    landingLongitude: '',
     landingTime: '',
     flightDuration: '',
     totalFlightTime: '',
@@ -84,7 +90,24 @@ const FlightLog = () => {
   useEffect(() => {
     loadData();
     loadAircraftList();
+    loadUserDefaults();
   }, []);
+
+  const loadUserDefaults = () => {
+    try {
+      const currentUser = localStorage.getItem('skylogger_current_user');
+      if (currentUser) {
+        const user = JSON.parse(currentUser);
+        setFlightData(prev => ({
+          ...prev,
+          pilotName: user.fullName || '',
+          licenseNumber: user.pilotLicense || ''
+        }));
+      }
+    } catch (error) {
+      console.error('ユーザーデフォルト値の読み込みに失敗しました:', error);
+    }
+  };
 
   const loadData = () => {
     try {
@@ -218,17 +241,22 @@ const FlightLog = () => {
       setFlightRecords(updatedRecords);
       saveFlightRecords(updatedRecords);
       
-      // フォームをリセット（機体選択は保持）
+      // フォームをリセット（機体選択とユーザー情報は保持）
+      const currentUser = JSON.parse(localStorage.getItem('skylogger_current_user') || '{}');
       setFlightData({
         flightDate: new Date().toISOString().split('T')[0],
         selectedAircraft: flightData.selectedAircraft, // 機体選択は保持
-        pilotName: '',
-        licenseNumber: '',
+        pilotName: currentUser.fullName || '', // ログインユーザーの氏名を自動入力
+        licenseNumber: currentUser.pilotLicense || '', // ログインユーザーの技能証明書を自動入力
         flightPurpose: '',
         flightRoute: '',
         takeoffLocation: '',
+        takeoffLatitude: '',
+        takeoffLongitude: '',
         takeoffTime: '',
         landingLocation: '',
+        landingLatitude: '',
+        landingLongitude: '',
         landingTime: '',
         flightDuration: '',
         totalFlightTime: '',
@@ -250,9 +278,9 @@ const FlightLog = () => {
     
     const headers = [
       '飛行年月日', '機体登録記号', '機体種類', '機体型式', '操縦者氏名', '技能証明書番号', 
-      '飛行目的', '飛行経路', '離陸場所', '離陸時刻', '着陸場所', '着陸時刻', 
-      '飛行時間(分)', '製造後総飛行時間(分)', '飛行禁止空域・飛行方法', 
-      '飛行前点検実施状況', '安全に影響のあった事項', '不具合・対応', '記録作成日時'
+      '飛行目的', '飛行経路', '離陸場所', '離陸緯度', '離陸経度', '離陸時刻', 
+      '着陸場所', '着陸緯度', '着陸経度', '着陸時刻', '飛行時間(分)', '製造後総飛行時間(分)', 
+      '飛行禁止空域・飛行方法', '飛行前点検実施状況', '安全に影響のあった事項', '不具合・対応', '記録作成日時'
     ];
     
     const csvContent = [
@@ -273,8 +301,12 @@ const FlightLog = () => {
           `"${record.flightPurpose}"`,
           `"${record.flightRoute || ''}"`,
           `"${record.takeoffLocation}"`,
+          record.takeoffLatitude || '',
+          record.takeoffLongitude || '',
           record.takeoffTime,
           `"${record.landingLocation}"`,
+          record.landingLatitude || '',
+          record.landingLongitude || '',
           record.landingTime,
           record.flightDuration,
           record.totalFlightTime,
@@ -301,6 +333,77 @@ const FlightLog = () => {
     document.body.removeChild(link);
   };
 
+  const openMap = (latitude, longitude, locationName) => {
+    const mapChoice = window.confirm(
+      `${locationName}の位置を地図で表示しますか？\n` +
+      `座標: ${latitude}, ${longitude}\n\n` +
+      `OKを押すと埋め込み地図で表示\n` +
+      `キャンセルを押すとGoogle Mapsで開きます`
+    );
+    
+    if (mapChoice) {
+      // 埋め込み地図で表示
+      setMapData({ lat: latitude, lng: longitude, name: locationName });
+      setShowMap(true);
+    } else {
+      // Google Mapsで外部リンクで開く
+      const googleMapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}&z=15&t=h`;
+      window.open(googleMapsUrl, '_blank');
+    }
+  };
+
+  const closeMap = () => {
+    setShowMap(false);
+  };
+
+  const getCurrentLocation = (locationType) => {
+    if (!navigator.geolocation) {
+      alert('お使いのブラウザはGPS機能をサポートしていません');
+      return;
+    }
+
+    const button = document.querySelector(`[title="現在地を取得"]`);
+    if (button) button.textContent = '📍 取得中...';
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        setFlightData(prev => ({
+          ...prev,
+          [`${locationType}Latitude`]: latitude.toFixed(6),
+          [`${locationType}Longitude`]: longitude.toFixed(6)
+        }));
+        
+        if (button) button.textContent = '📍 GPS';
+        alert(`${locationType === 'takeoff' ? '離陸' : '着陸'}地点の座標を取得しました\n緯度: ${latitude.toFixed(6)}\n経度: ${longitude.toFixed(6)}`);
+      },
+      (error) => {
+        if (button) button.textContent = '📍 GPS';
+        let errorMessage = 'GPS位置情報の取得に失敗しました';
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'GPS位置情報の使用が拒否されました。ブラウザの設定を確認してください。';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'GPS位置情報が利用できません。';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'GPS位置情報の取得がタイムアウトしました。';
+            break;
+        }
+        
+        alert(errorMessage);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
+
   const clearAllRecords = () => {
     if (window.confirm('すべての飛行記録を削除しますか？この操作は取り消せません。')) {
       setFlightRecords([]);
@@ -311,6 +414,51 @@ const FlightLog = () => {
 
   return (
     <div className="page-content">
+      {/* 地図モーダル */}
+      {showMap && (
+        <div className="map-modal">
+          <div className="map-modal-content">
+            <div className="map-header">
+              <h3>📍 {mapData.name} - 地図表示</h3>
+              <button className="close-map-btn" onClick={closeMap}>✕ 閉じる</button>
+            </div>
+            <div className="map-info">
+              <strong>座標:</strong> {mapData.lat}, {mapData.lng}
+            </div>
+            <div className="map-container">
+              <iframe
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${parseFloat(mapData.lng) - 0.01},${parseFloat(mapData.lat) - 0.01},${parseFloat(mapData.lng) + 0.01},${parseFloat(mapData.lat) + 0.01}&layer=mapnik&marker=${mapData.lat},${mapData.lng}`}
+                style={{
+                  width: '100%',
+                  height: '400px',
+                  border: 'none',
+                  borderRadius: '12px'
+                }}
+                title={`地図: ${mapData.name}`}
+              />
+            </div>
+            <div className="map-links">
+              <a 
+                href={`https://www.google.com/maps?q=${mapData.lat},${mapData.lng}&z=15`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="map-link-btn"
+              >
+                🗺️ Google Mapsで開く
+              </a>
+              <a 
+                href={`https://earth.google.com/web/@${mapData.lat},${mapData.lng},100a,1000d,35y,0h,0t,0r`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="map-link-btn"
+              >
+                🌍 Google Earthで開く
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 飛行記録入力セクション */}
       <section className="form-section">
         <h2>飛行記録の入力</h2>
@@ -408,7 +556,14 @@ const FlightLog = () => {
           
           <div className="input-row">
             <div className="input-group">
-              <label htmlFor="pilotName">操縦者氏名 <span className="required">*</span></label>
+              <label htmlFor="pilotName">
+                操縦者氏名 <span className="required">*</span>
+                {flightData.pilotName && (
+                  <span className="auto-filled-indicator" title="ログイン情報から自動入力">
+                    👤 自動入力
+                  </span>
+                )}
+              </label>
               <input 
                 type="text" 
                 name="pilotName" 
@@ -416,16 +571,25 @@ const FlightLog = () => {
                 onChange={handleFlightDataChange}
                 placeholder="山田太郎" 
                 required 
+                className={flightData.pilotName ? 'auto-filled' : ''}
               />
             </div>
             <div className="input-group">
-              <label htmlFor="licenseNumber">技能証明書番号</label>
+              <label htmlFor="licenseNumber">
+                技能証明書番号
+                {flightData.licenseNumber && (
+                  <span className="auto-filled-indicator" title="ログイン情報から自動入力">
+                    🏆 自動入力
+                  </span>
+                )}
+              </label>
               <input 
                 type="text" 
                 name="licenseNumber" 
                 value={flightData.licenseNumber}
                 onChange={handleFlightDataChange}
                 placeholder="資格保有者のみ入力" 
+                className={flightData.licenseNumber ? 'auto-filled' : ''}
               />
               <small>無人航空機操縦者技能証明書を保有している場合</small>
             </div>
@@ -464,7 +628,17 @@ const FlightLog = () => {
 
           <div className="input-row">
             <div className="input-group">
-              <label htmlFor="takeoffLocation">離陸場所 <span className="required">*</span></label>
+              <label htmlFor="takeoffLocation">
+                離陸場所 <span className="required">*</span>
+                <button 
+                  type="button" 
+                  className="gps-button inline-gps"
+                  onClick={() => getCurrentLocation('takeoff')}
+                  title="現在地を取得"
+                >
+                  📍 GPS
+                </button>
+              </label>
               <input 
                 type="text" 
                 name="takeoffLocation" 
@@ -488,7 +662,60 @@ const FlightLog = () => {
 
           <div className="input-row">
             <div className="input-group">
-              <label htmlFor="landingLocation">着陸場所 <span className="required">*</span></label>
+              <label htmlFor="takeoffLatitude">離陸地点緯度 📍</label>
+              <div className="gps-input-container">
+                <input 
+                  type="number" 
+                  name="takeoffLatitude" 
+                  value={flightData.takeoffLatitude}
+                  onChange={handleFlightDataChange}
+                  placeholder="35.6762" 
+                  step="0.000001"
+                  min="-90"
+                  max="90"
+                />
+                {(flightData.takeoffLatitude && flightData.takeoffLongitude) && (
+                  <button 
+                    type="button" 
+                    className="map-button"
+                    onClick={() => openMap(flightData.takeoffLatitude, flightData.takeoffLongitude, '離陸地点')}
+                    title="地図で表示"
+                  >
+                    🗺️ 地図
+                  </button>
+                )}
+              </div>
+              <small>例: 35.6762 (東京駅)</small>
+            </div>
+            <div className="input-group">
+              <label htmlFor="takeoffLongitude">離陸地点経度 📍</label>
+              <input 
+                type="number" 
+                name="takeoffLongitude" 
+                value={flightData.takeoffLongitude}
+                onChange={handleFlightDataChange}
+                placeholder="139.6503" 
+                step="0.000001"
+                min="-180"
+                max="180"
+              />
+              <small>例: 139.6503 (東京駅)</small>
+            </div>
+          </div>
+
+          <div className="input-row">
+            <div className="input-group">
+              <label htmlFor="landingLocation">
+                着陸場所 <span className="required">*</span>
+                <button 
+                  type="button" 
+                  className="gps-button inline-gps"
+                  onClick={() => getCurrentLocation('landing')}
+                  title="現在地を取得"
+                >
+                  📍 GPS
+                </button>
+              </label>
               <input 
                 type="text" 
                 name="landingLocation" 
@@ -507,6 +734,49 @@ const FlightLog = () => {
                 onChange={handleFlightDataChange}
                 required 
               />
+            </div>
+          </div>
+
+          <div className="input-row">
+            <div className="input-group">
+              <label htmlFor="landingLatitude">着陸地点緯度 📍</label>
+              <div className="gps-input-container">
+                <input 
+                  type="number" 
+                  name="landingLatitude" 
+                  value={flightData.landingLatitude}
+                  onChange={handleFlightDataChange}
+                  placeholder="35.6762" 
+                  step="0.000001"
+                  min="-90"
+                  max="90"
+                />
+                {(flightData.landingLatitude && flightData.landingLongitude) && (
+                  <button 
+                    type="button" 
+                    className="map-button"
+                    onClick={() => openMap(flightData.landingLatitude, flightData.landingLongitude, '着陸地点')}
+                    title="地図で表示"
+                  >
+                    🗺️ 地図
+                  </button>
+                )}
+              </div>
+              <small>例: 35.6762 (東京駅)</small>
+            </div>
+            <div className="input-group">
+              <label htmlFor="landingLongitude">着陸地点経度 📍</label>
+              <input 
+                type="number" 
+                name="landingLongitude" 
+                value={flightData.landingLongitude}
+                onChange={handleFlightDataChange}
+                placeholder="139.6503" 
+                step="0.000001"
+                min="-180"
+                max="180"
+              />
+              <small>例: 139.6503 (東京駅)</small>
             </div>
           </div>
 
@@ -647,7 +917,33 @@ const FlightLog = () => {
                     </div>
                     <div className="detail-item">
                       <strong>離陸:</strong> {record.takeoffLocation} ({record.takeoffTime})<br />
+                      {(record.takeoffLatitude && record.takeoffLongitude) && (
+                        <>
+                          <strong>離陸座標:</strong> {record.takeoffLatitude}, {record.takeoffLongitude}
+                          <button 
+                            className="map-button"
+                            onClick={() => openMap(record.takeoffLatitude, record.takeoffLongitude, '離陸地点')}
+                            title="地図で表示"
+                          >
+                            🗺️ 地図
+                          </button>
+                          <br />
+                        </>
+                      )}
                       <strong>着陸:</strong> {record.landingLocation} ({record.landingTime})
+                      {(record.landingLatitude && record.landingLongitude) && (
+                        <>
+                          <br />
+                          <strong>着陸座標:</strong> {record.landingLatitude}, {record.landingLongitude}
+                          <button 
+                            className="map-button"
+                            onClick={() => openMap(record.landingLatitude, record.landingLongitude, '着陸地点')}
+                            title="地図で表示"
+                          >
+                            🗺️ 地図
+                          </button>
+                        </>
+                      )}
                     </div>
                     <div className="detail-item">
                       <strong>製造後総飛行時間:</strong> {record.totalFlightTime}分

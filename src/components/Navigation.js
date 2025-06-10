@@ -11,19 +11,25 @@ const Navigation = () => {
           to="/" 
           className={location.pathname === '/' ? 'nav-link active' : 'nav-link'}
         >
-          ダッシュボード
+          📊 ダッシュボード
         </Link>
         <Link 
           to="/aircraft" 
           className={location.pathname === '/aircraft' ? 'nav-link active' : 'nav-link'}
         >
-          無人航空機登録
+          ✈️ 無人航空機登録
         </Link>
         <Link 
           to="/flight-log" 
           className={location.pathname === '/flight-log' ? 'nav-link active' : 'nav-link'}
         >
-          飛行記録
+          📝 飛行記録
+        </Link>
+        <Link 
+          to="/profile" 
+          className={location.pathname === '/profile' ? 'nav-link active' : 'nav-link'}
+        >
+          👤 プロフィール
         </Link>
       </div>
     </nav>
